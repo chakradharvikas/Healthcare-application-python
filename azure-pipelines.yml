@@ -40,7 +40,10 @@ stages:
       - job: Validation
         displayName: 'Code validation'
         pool:
-          vmImage: 'Default'
+          name: 'Default'
+          demands:
+          - Agent.Name -equals sonarqube-vm
+          
         steps:
           - checkout: self
 
