@@ -40,7 +40,7 @@ stages:
       - job: Validation
         displayName: 'Code validation'
         pool:
-          vmImage: 'sonarqube-vm'
+          vmImage: 'default'
         steps:
           - checkout: self
 
