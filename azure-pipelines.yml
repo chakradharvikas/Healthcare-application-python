@@ -40,7 +40,7 @@ stages:
       - job: Validation
         displayName: 'Code validation'
         pool:
-          name: 'ubuntu-latest'
+          vmImage: 'ubuntu-latest'
           
         steps:
           - checkout: self
