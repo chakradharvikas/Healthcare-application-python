@@ -40,9 +40,7 @@ stages:
       - job: Validation
         displayName: 'Code validation'
         pool:
-          name: 'Default'
-          demands:
-          - Agent.Name -equals sonarqube-vm
+          name: 'ubuntu-latest'
           
         steps:
           - checkout: self
