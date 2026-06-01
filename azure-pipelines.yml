@@ -39,9 +39,11 @@ stages:
     jobs:
       - job: Validation
         displayName: 'Code validation'
+
         pool:
-          vmImage: 'ubuntu-latest'
-          
+          name: 'Default'
+          demands:
+            - Agent.Name -equals sonarqube-vm
         steps:
           - checkout: self
 
@@ -153,7 +155,9 @@ stages:
       - job: BuildImage
         displayName: 'Docker build and push'
         pool:
-          vmImage: 'ubuntu-latest'
+          name: 'Default'
+          demands:
+            - Agent.Name -equals sonarqube-vm
         steps:
           - checkout: self
 
@@ -224,8 +228,11 @@ stages:
     jobs:
       - job: TerraformPlan
         displayName: 'Terraform plan'
+
         pool:
-          vmImage: 'ubuntu-latest'
+          name: 'Default'
+          demands:
+            - Agent.Name -equals sonarqube-vm
         steps:
           - checkout: self
 
@@ -294,7 +301,9 @@ stages:
         displayName: 'Deploy to development AKS'
         environment: 'dev-aks'
         pool:
-          vmImage: 'ubuntu-latest'
+          name: 'Default'
+          demands:
+          - Agent.Name -equals sonarqube-vm
         strategy:
           runOnce:
             deploy:
@@ -325,7 +334,9 @@ stages:
     jobs:
       - job: WaitForApproval
         pool:
-          vmImage: 'ubuntu-latest'
+          name: 'Default'
+          demands:
+          - Agent.Name -equals sonarqube-vm
         steps:
           - script: |
               echo "Manual approval placeholder: please verify the dev deployment before proceeding to prod."
@@ -339,7 +350,9 @@ stages:
         displayName: 'Deploy to production AKS'
         environment: 'prod-aks'
         pool:
-          vmImage: 'ubuntu-latest'
+          name: 'Default'
+          demands:
+          - Agent.Name -equals sonarqube-vm
         strategy:
           runOnce:
             deploy:
