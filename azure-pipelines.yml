@@ -29,6 +29,9 @@ variables:
   tfstateStorageAccount: 'tfstatehealthcare'
   tfstateContainer: 'tfstate'
   tfstateKey: 'healthcare-azure.tfstate'
+  sonarQubeServiceConnection: 'Healthcare_SonarQube'
+  sonarProjectKey: 'Healthcare-application'
+  sonarProjectName: 'Healthcare-application'
 
 stages:
   - stage: Validate
@@ -37,7 +40,7 @@ stages:
       - job: Validation
         displayName: 'Code validation'
         pool:
-          vmImage: 'ubuntu-latest'
+          vmImage: 'sonarqube-vm'
         steps:
           - checkout: self
 
@@ -48,17 +51,52 @@ stages:
 
           - script: |
               python -m pip install --upgrade pip
-              pip install ruff pytest semgrep pip-audit trufflehog
+              pip install ruff pytest pytest-cov semgrep pip-audit trufflehog
               pip install -r requirements.txt
             displayName: 'Install Python tooling and app dependencies'
+
+          - task: SonarQubePrepare@7
+            displayName: 'Prepare SonarQube Analysis'
+            inputs:
+              SonarQube: '$(sonarQubeServiceConnection)'
+              scannerMode: 'CLI'
+              configMode: 'manual'
+              cliProjectKey: '$(sonarProjectKey)'
+              cliProjectName: '$(sonarProjectName)'
+              extraProperties: |
+                sonar.python.coverage.reportPaths=coverage.xml
 
           - script: |
               ruff check .
             displayName: 'Lint Python code'
 
           - script: |
-              pytest -q
-            displayName: 'Run unit tests'
+              pytest \
+                --junitxml=test-results.xml \
+                --cov=. \
+                --cov-report=xml
+            displayName: 'Run unit tests and generate coverage'
+
+          - task: PublishTestResults@2
+            displayName: 'Publish Unit Test Results'
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/test-results.xml'
+              failTaskOnFailedTests: true
+
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish Coverage Results'
+            inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: '$(System.DefaultWorkingDirectory)/coverage.xml'
+
+          - task: SonarQubeAnalyze@7
+            displayName: 'Run SonarQube Analysis'
+
+          - task: SonarQubePublish@7
+            displayName: 'Publish SonarQube Quality Gate'
+            inputs:
+              pollingTimeoutSec: '300'  
 
           - script: |
               semgrep --config auto .
@@ -147,9 +185,37 @@ stages:
             displayName: 'Push image to ACR (Git SHA + semver tags)'
 
           - script: |
-              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-              trivy image --exit-code 1 --severity CRITICAL --ignore-unfixed $(acrLoginServer)/$(imageName):$(imageTag)
+              trivy image \
+                --format table \
+                $(acrLoginServer)/$(imageName):$(imageTag) \
+                > trivy-report.txt
+
+              cat trivy-report.txt
+
+              trivy image \
+                --exit-code 1 \
+                --severity CRITICAL \
+                --ignore-unfixed \
+                $(acrLoginServer)/$(imageName):$(imageTag)
             displayName: 'Container scan with Trivy'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Trivy Report'
+            inputs:
+              targetPath: 'trivy-report.txt'
+              artifact: 'TrivyReport'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Coverage XML'
+            inputs:
+              targetPath: 'coverage.xml'
+              artifact: 'CoverageXML'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Test XML'
+            inputs:
+              targetPath: 'test-results.xml'
+              artifact: 'TestResultsXML'
 
   - stage: TerraformPlan
     displayName: 'Terraform Plan'
