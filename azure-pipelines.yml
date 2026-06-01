@@ -10,7 +10,7 @@ pr:
 
 variables:
   azureServiceConnection: 'healthcare_app_service_connection'
-  azureContainerRegistry: 'healthcareacr733833'
+  azureContainerRegistry: 'healthcareacr73383'
   imageName: 'healthcare-app'
   imageTag: '$(Build.SourceVersion)'
   imageSemverTag: '1.0.$(Build.BuildId)'
