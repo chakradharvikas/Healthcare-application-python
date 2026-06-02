@@ -10,11 +10,11 @@ pr:
 
 variables:
   azureServiceConnection: 'healthcare_app_service_connection'
-  azureContainerRegistry: 'healthcareacr73383dev123'
+  azureContainerRegistry: 'healthcareacr73383'
   imageName: 'healthcare-app'
   imageTag: '$(Build.SourceVersion)'
   imageSemverTag: '1.0.$(Build.BuildId)'
-  acrLoginServer: 'healthcareacr73383dev123.azurecr.io'
+  acrLoginServer: 'healthcareacr73383.azurecr.io'
   aksResourceGroupDev: 'rg-healthcare-dev'
   aksClusterNameDev: 'aks-healthcare-dev'
   aksResourceGroupProd: 'rg-healthcare-prod'
