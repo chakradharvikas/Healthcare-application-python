@@ -185,7 +185,12 @@ stages:
               inlineScript: |
                 az account show
                 cd $(terraformWorkingDirectory)
-                terraform init -backend-config="resource_group_name=$(tfstateResourceGroup)" \
+
+                rm -rf .terraform
+                rm -f .terraform.lock.hcl
+                
+                terraform init -reconfigure \
+                  -backend-config="resource_group_name=$(tfstateResourceGroup)" \
                   -backend-config="storage_account_name=$(tfstateStorageAccount)" \
                   -backend-config="container_name=$(tfstateContainer)" \
                   -backend-config="key=$(tfstateKey)"
