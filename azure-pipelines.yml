@@ -418,6 +418,8 @@ stages:
                 # ===== MAIN DEPLOYMENT STEP =====
                 - task: AzureCLI@2
                   displayName: "Deploy Helm chart to AKS Dev (with rollback)"
+                  env:
+                    AZURE_CLI_DISABLE_KUBELOGIN: '1'
                   inputs:
                     azureSubscription: "$(azureServiceConnection)"
                     scriptType: bash
@@ -529,6 +531,8 @@ stages:
                 # ===== MAIN DEPLOYMENT STEP (PROD) =====
                 - task: AzureCLI@2
                   displayName: "Deploy Helm chart to AKS Prod (with rollback)"
+                  env:
+                    AZURE_CLI_DISABLE_KUBELOGIN: '1'
                   inputs:
                     azureSubscription: "$(azureServiceConnection)"
                     scriptType: bash
