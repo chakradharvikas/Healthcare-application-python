@@ -327,7 +327,7 @@ stages:
         displayName: "Deploy to development AKS"
         environment: "dev-aks"
         pool:
-          vmImage: "ubuntu-latest"
+          name: "Default"
         strategy:
           runOnce:
             deploy:
@@ -358,7 +358,7 @@ stages:
     jobs:
       - job: WaitForApproval
         pool:
-          vmImage: "ubuntu-latest"
+          name: "Default"
         steps:
           - script: |
               echo "Manual approval placeholder: please verify the dev deployment before proceeding to prod."
@@ -372,7 +372,7 @@ stages:
         displayName: "Deploy to production AKS"
         environment: "prod-aks"
         pool:
-          vmImage: "ubuntu-latest"
+          name: "Default"
         strategy:
           runOnce:
             deploy:
