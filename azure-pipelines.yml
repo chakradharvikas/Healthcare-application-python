@@ -29,7 +29,6 @@ variables:
   tfstateStorageAccount: 'tfstatehealthcare01'
   tfstateContainer: 'tfstate'
   tfstateKey: 'healthcare-azure.tfstate'
-  keyvaultName: 'hc-kv-tfplan82'
   
   # Centralized Azure Active Directory Tenant and Key Vault Names
   tenantId: 'a784860b-041b-42c0-a9b9-557e2e721e95'
