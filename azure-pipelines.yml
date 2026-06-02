@@ -10,11 +10,11 @@ pr:
 
 variables:
   azureServiceConnection: 'healthcare_app_service_connection'
-  azureContainerRegistry: 'healthcareacr73383'
+  azureContainerRegistry: 'healthcareacr73383dev'
   imageName: 'healthcare-app'
   imageTag: '$(Build.SourceVersion)'
   imageSemverTag: '1.0.$(Build.BuildId)'
-  acrLoginServer: 'healthcareacr73383.azurecr.io'
+  acrLoginServer: 'healthcareacr73383dev.azurecr.io'
   aksResourceGroupDev: 'rg-healthcare-dev'
   aksClusterNameDev: 'aks-healthcare-dev'
   aksResourceGroupProd: 'rg-healthcare-prod'
@@ -286,7 +286,7 @@ stages:
                   -var="vnet_cidr=10.20.0.0/16" \
                   -var="private_subnet_cidr=10.20.1.0/24" \
                   -var="public_subnet_cidr=10.20.2.0/24" \
-                  -var="acr_name=healthcareacr73383" \
+                  -var="acr_name=healthcareacr73383dev" \
                   -var="acr_sku=Basic" \
                   -var="keyvault_name=hc-kv-tfplan733833" \
                   -var="tenant_id=a90a3e51-3c2e-4181-9600-bc0e180533e9" \
