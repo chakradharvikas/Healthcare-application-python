@@ -26,7 +26,7 @@ variables:
   azAdClientId: ''
   terraformWorkingDirectory: 'terraform/azure'
   tfstateResourceGroup: 'rg-terraform'
-  tfstateStorageAccount: 'tfstatehealthcare'
+  tfstateStorageAccount: 'tfstatehealthcare01'
   tfstateContainer: 'tfstate'
   tfstateKey: 'healthcare-azure.tfstate'
 
