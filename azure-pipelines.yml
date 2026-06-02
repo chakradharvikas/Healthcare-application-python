@@ -426,7 +426,7 @@ stages:
                       set -e
                       
                       echo "Setting up AKS credentials..."
-                      az aks get-credentials --resource-group $(aksResourceGroupDev) --name $(aksClusterNameDev) --overwrite-existing
+                      az aks get-credentials --resource-group $(aksResourceGroupDev) --name $(aksClusterNameDev) --overwrite-existing --admin
                       
                       echo "Installing AKS CLI tools..."
                       # az aks install-cli
@@ -534,7 +534,7 @@ stages:
                       set -e
                       
                       echo "Setting up AKS credentials..."
-                      az aks get-credentials --resource-group $(aksResourceGroupProd) --name $(aksClusterNameProd) --overwrite-existing
+                      az aks get-credentials --resource-group $(aksResourceGroupProd) --name $(aksClusterNameProd) --overwrite-existing --admin
                       
                       echo "Installing AKS CLI tools..."
                       # az aks install-cli
