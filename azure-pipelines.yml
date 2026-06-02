@@ -322,6 +322,7 @@ stages:
   - stage: DeployDev
     displayName: "Deploy to Dev AKS"
     dependsOn: TerraformApply
+    condition: succeeded()
     jobs:
       - deployment: DeployDev
         displayName: "Deploy to development AKS"
@@ -334,39 +335,115 @@ stages:
               steps:
                 - checkout: self
 
+                # ===== DIAGNOSTIC STEP =====
                 - task: AzureCLI@2
+                  displayName: "Diagnose DNS & Network Issues (Dev)"
                   inputs:
                     azureSubscription: "$(azureServiceConnection)"
                     scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
+                      echo "========================================"
+                      echo "  DNS & NETWORK DIAGNOSTICS (Dev)"
+                      echo "========================================"
+                      
+                      echo ""
+                      echo "=== 1. DNS Configuration ==="
+                      cat /etc/resolv.conf
+                      
+                      echo ""
+                      echo "=== 2. Testing DNS Resolution ==="
+                      nslookup aks-healthcare-tfplan-clj8x9if.be3979cc-34be-4127-8546-5012d3bc7276.privatelink.centralindia.azmk8s.io || echo "❌ DNS lookup failed"
+                      
+                      echo ""
+                      echo "=== 3. Testing Network Connectivity ==="
+                      ping -c 2 aks-healthcare-tfplan-clj8x9if.be3979cc-34be-4127-8546-5012d3bc7276.privatelink.centralindia.azmk8s.io || echo "⚠️  Ping failed (expected for private endpoint)"
+                      
+                      echo ""
+                      echo "=== 4. Agent Network Configuration ==="
+                      echo "Hostname: $(hostname)"
+                      echo "IP Address(es):"
+                      hostname -I
+                      
+                      echo ""
+                      echo "=== 5. Routing Table ==="
+                      ip route
+                      
+                      echo ""
+                      echo "=== 6. Network Interfaces ==="
+                      ip addr show
+                      
+                      echo ""
+                      echo "=== 7. Azure Subscription Info ==="
+                      az account show --query "{Subscription: name, TenantId: tenantId}"
+                      
+                      echo ""
+                      echo "=== 8. Testing kubectl connectivity ==="
+                      kubectl cluster-info || echo "⚠️  kubectl not yet configured (will be done in next step)"
+                      
+                      echo ""
+                      echo "========================================"
+                  continueOnError: true
+
+                # ===== MAIN DEPLOYMENT STEP =====
+                - task: AzureCLI@2
+                  displayName: "Deploy Helm chart to AKS Dev (with rollback)"
+                  inputs:
+                    azureSubscription: "$(azureServiceConnection)"
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -e
+                      
+                      echo "Setting up AKS credentials..."
                       az aks get-credentials --resource-group $(aksResourceGroupDev) --name $(aksClusterNameDev) --overwrite-existing
+                      
+                      echo "Installing AKS CLI tools..."
                       az aks install-cli
+                      
+                      echo "Downloading and installing Helm v3.12.0..."
                       curl -fsSL https://get.helm.sh/helm-v3.12.0-linux-amd64.tar.gz -o helm.tar.gz
                       tar -zxvf helm.tar.gz
                       sudo mv linux-amd64/helm /usr/local/bin/helm
                       helm version
-                      helm upgrade --install $(helmReleaseName) $(helmChartPath) --namespace $(helmNamespaceDev) --create-namespace \
+                      
+                      echo "Deploying Helm chart to Dev namespace: $(helmNamespaceDev)..."
+                      helm upgrade --install $(helmReleaseName) $(helmChartPath) \
+                        --namespace $(helmNamespaceDev) \
+                        --create-namespace \
                         --set image.repository=$(acrLoginServer)/$(imageName) \
                         --set image.tag=$(imageTag) \
-                        || { echo "Helm upgrade failed; attempting rollback"; helm rollback $(helmReleaseName) -n $(helmNamespaceDev) || true; exit 1; }
-                  displayName: "Deploy Helm chart to AKS Dev (with rollback)"
+                        --wait \
+                        --timeout 5m || \
+                      { 
+                        echo "Helm upgrade failed; attempting rollback..."
+                        helm rollback $(helmReleaseName) -n $(helmNamespaceDev) || true
+                        exit 1
+                      }
+                      
+                      echo "✅ Dev deployment successful!"
 
   - stage: Approval
     displayName: "Manual Approval for Prod"
     dependsOn: DeployDev
+    condition: succeeded()
     jobs:
       - job: WaitForApproval
+        displayName: "Wait for Production Approval"
         pool:
-          name: "Default"
+          server
+        timeoutInMinutes: 1440
         steps:
-          - script: |
-              echo "Manual approval placeholder: please verify the dev deployment before proceeding to prod."
-            displayName: "Approval placeholder"
+          - task: ManualValidation@0
+            displayName: "Manual Approval Required"
+            inputs:
+              notifyUsers: "your-team@company.com"
+              instructions: "Please verify the dev deployment ($(aksClusterNameDev)) before proceeding to production. Check logs at https://portal.azure.com"
 
   - stage: DeployProd
     displayName: "Deploy to Prod AKS"
     dependsOn: Approval
+    condition: succeeded()
     jobs:
       - deployment: DeployProd
         displayName: "Deploy to production AKS"
@@ -379,20 +456,77 @@ stages:
               steps:
                 - checkout: self
 
+                # ===== DIAGNOSTIC STEP (PROD) =====
                 - task: AzureCLI@2
+                  displayName: "Diagnose DNS & Network Issues (Prod)"
                   inputs:
                     azureSubscription: "$(azureServiceConnection)"
                     scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
+                      echo "========================================"
+                      echo "  DNS & NETWORK DIAGNOSTICS (Prod)"
+                      echo "========================================"
+                      
+                      echo ""
+                      echo "=== 1. DNS Configuration ==="
+                      cat /etc/resolv.conf
+                      
+                      echo ""
+                      echo "=== 2. Testing DNS Resolution ==="
+                      nslookup aks-healthcare-prod.privatelink.centralindia.azmk8s.io || echo "❌ DNS lookup failed"
+                      
+                      echo ""
+                      echo "=== 3. Agent Network Configuration ==="
+                      echo "Hostname: $(hostname)"
+                      hostname -I
+                      
+                      echo ""
+                      echo "=== 4. Routing Table ==="
+                      ip route
+                      
+                      echo ""
+                      echo "=== 5. Azure Subscription Info ==="
+                      az account show --query "{Subscription: name, TenantId: tenantId}"
+                      
+                      echo ""
+                      echo "========================================"
+                  continueOnError: true
+
+                # ===== MAIN DEPLOYMENT STEP (PROD) =====
+                - task: AzureCLI@2
+                  displayName: "Deploy Helm chart to AKS Prod (with rollback)"
+                  inputs:
+                    azureSubscription: "$(azureServiceConnection)"
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -e
+                      
+                      echo "Setting up AKS credentials..."
                       az aks get-credentials --resource-group $(aksResourceGroupProd) --name $(aksClusterNameProd) --overwrite-existing
+                      
+                      echo "Installing AKS CLI tools..."
                       az aks install-cli
+                      
+                      echo "Downloading and installing Helm v3.12.0..."
                       curl -fsSL https://get.helm.sh/helm-v3.12.0-linux-amd64.tar.gz -o helm.tar.gz
                       tar -zxvf helm.tar.gz
                       sudo mv linux-amd64/helm /usr/local/bin/helm
                       helm version
-                      helm upgrade --install $(helmReleaseName) $(helmChartPath) --namespace $(helmNamespaceProd) --create-namespace \
+                      
+                      echo "Deploying Helm chart to Prod namespace: $(helmNamespaceProd)..."
+                      helm upgrade --install $(helmReleaseName) $(helmChartPath) \
+                        --namespace $(helmNamespaceProd) \
+                        --create-namespace \
                         --set image.repository=$(acrLoginServer)/$(imageName) \
                         --set image.tag=$(imageTag) \
-                        || { echo "Helm upgrade failed; attempting rollback"; helm rollback $(helmReleaseName) -n $(helmNamespaceProd) || true; exit 1; }
-                  displayName: "Deploy Helm chart to AKS Prod (with rollback)"
+                        --wait \
+                        --timeout 5m || \
+                      { 
+                        echo "Helm upgrade failed; attempting rollback..."
+                        helm rollback $(helmReleaseName) -n $(helmNamespaceProd) || true
+                        exit 1
+                      }
+                      
+                      echo "✅ Production deployment successful!"
