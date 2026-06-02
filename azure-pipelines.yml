@@ -426,15 +426,18 @@ stages:
                       set -e
                       
                       echo "Setting up AKS credentials..."
-                      az aks get-credentials --resource-group $(aksResourceGroupDev) --name $(aksClusterNameDev) --overwrite-existing --admin
+                      az aks get-credentials \
+                        --resource-group $(aksResourceGroupDev) \
+                        --name $(aksClusterNameDev) \
+                        --overwrite-existing \
+                        --admin \
+                        --file kubeconfig.yaml
                       
-                      echo "Installing AKS CLI tools..."
-                      # az aks install-cli
+                      export KUBECONFIG=$(pwd)/kubeconfig.yaml
                       
-                      echo "Downloading and installing Helm v3.12.0..."
-                      curl -fsSL https://get.helm.sh/helm-v3.12.0-linux-amd64.tar.gz -o helm.tar.gz
-                      tar -zxvf helm.tar.gz
-                      sudo mv linux-amd64/helm /usr/local/bin/helm
+                      echo "Verifying tools..."
+                      kubectl cluster-info
+                      kubectl version --client
                       helm version
                       
                       echo "Deploying Helm chart to Dev namespace: $(helmNamespaceDev)..."
@@ -534,15 +537,18 @@ stages:
                       set -e
                       
                       echo "Setting up AKS credentials..."
-                      az aks get-credentials --resource-group $(aksResourceGroupProd) --name $(aksClusterNameProd) --overwrite-existing --admin
+                      az aks get-credentials \
+                        --resource-group $(aksResourceGroupProd) \
+                        --name $(aksClusterNameProd) \
+                        --overwrite-existing \
+                        --admin \
+                        --file kubeconfig.yaml
                       
-                      echo "Installing AKS CLI tools..."
-                      # az aks install-cli
+                      export KUBECONFIG=$(pwd)/kubeconfig.yaml
                       
-                      echo "Downloading and installing Helm v3.12.0..."
-                      curl -fsSL https://get.helm.sh/helm-v3.12.0-linux-amd64.tar.gz -o helm.tar.gz
-                      tar -zxvf helm.tar.gz
-                      sudo mv linux-amd64/helm /usr/local/bin/helm
+                      echo "Verifying tools..."
+                      kubectl cluster-info
+                      kubectl version --client
                       helm version
                       
                       echo "Deploying Helm chart to Prod namespace: $(helmNamespaceProd)..."
