@@ -288,7 +288,7 @@ stages:
                   -var="public_subnet_cidr=10.20.2.0/24" \
                   -var="acr_name=healthcareacr73383dev" \
                   -var="acr_sku=Basic" \
-                  -var="keyvault_name=hc-kv-tfplan733833" \
+                  -var="keyvault_name=hc-kv-tfplan$(Build.BuildId)" \
                   -var="tenant_id=a90a3e51-3c2e-4181-9600-bc0e180533e9" \
                   -var="keyvault_secret_name=database-url" \
                   -var="postgres_server_name=hc-pg-tfplan733833" \
