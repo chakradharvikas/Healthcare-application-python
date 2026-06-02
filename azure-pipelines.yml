@@ -182,6 +182,21 @@ stages:
             displayName: "Install Terraform"
 
           - task: AzureCLI@2
+            displayName: "Remove Stuck Terraform State Lock (if any)"
+            inputs:
+              azureSubscription: "$(azureServiceConnection)"
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "Checking for and removing any stuck state lock..."
+                az storage blob lease break \
+                  --account-name $(tfstateStorageAccount) \
+                  --container-name $(tfstateContainer) \
+                  --blob-name $(tfstateKey) || echo "✓ No active lease found (normal)"
+                echo "Proceeding with Terraform operations..."
+            continueOnError: true
+
+          - task: AzureCLI@2
             displayName: "Debug Service Connection"
             inputs:
               azureSubscription: "$(azureServiceConnection)"
@@ -274,6 +289,21 @@ stages:
               sudo apt-get install -y terraform
               terraform version
             displayName: "Install Terraform"
+
+          - task: AzureCLI@2
+            displayName: "Remove Stuck Terraform State Lock (if any)"
+            inputs:
+              azureSubscription: "$(azureServiceConnection)"
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "Checking for and removing any stuck state lock..."
+                az storage blob lease break \
+                  --account-name $(tfstateStorageAccount) \
+                  --container-name $(tfstateContainer) \
+                  --blob-name $(tfstateKey) || echo "✓ No active lease found (normal)"
+                echo "Proceeding with Terraform apply..."
+            continueOnError: true
 
           - task: AzureCLI@2
             displayName: "Terraform Apply"
