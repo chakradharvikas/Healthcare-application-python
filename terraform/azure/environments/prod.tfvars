@@ -22,7 +22,7 @@ acr_name = "healthcareacrprodtf"
 acr_sku  = "Premium"
 
 keyvault_name        = "hc-kv-prod-733833"
-tenant_id            = "a90a3e51-3c2e-4181-9600-bc0e180533e9"
+tenant_id            = "a784860b-041b-42c0-a9b9-557e2e721e95"
 keyvault_secret_name = "database-url"
 
 postgres_server_name   = "hc-pg-prod-733833"
