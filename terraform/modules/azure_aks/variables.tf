@@ -10,7 +10,7 @@ variable "log_analytics_workspace_id" { type = string }
 
 variable "availability_zones" {
   type    = list(string)
-  default = ["1", "2", "3"]
+  default = ["3"]
 }
 
 variable "private_cluster_enabled" {
