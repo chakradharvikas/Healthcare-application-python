@@ -25,13 +25,13 @@ module "network" {
   postgres_subnet_cidr = var.postgres_subnet_cidr
 }
 
-module "acr" {
-  source              = "../modules/azure_acr"
-  acr_name            = var.acr_name
-  resource_group_name = module.network.resource_group_name
-  location            = var.location
-  sku                 = var.acr_sku
-}
+# module "acr" {
+#   source              = "../modules/azure_acr"
+#   acr_name            = var.acr_name
+#   resource_group_name = module.network.resource_group_name
+#   location            = var.location
+#   sku                 = var.acr_sku
+# }
 
 module "postgres" {
   source              = "../modules/azure_postgres"
