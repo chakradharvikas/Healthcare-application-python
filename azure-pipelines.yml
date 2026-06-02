@@ -248,32 +248,32 @@ stages:
     condition: succeeded()
 
     jobs:
-    - job: TerraformApply
-      displayName: 'Apply Infrastructure'
+      - job: TerraformApply
+        displayName: 'Apply Infrastructure'
 
-    steps:
-    - checkout: self
+        steps:
+          - checkout: self
 
-    - task: TerraformInstaller@1
-      inputs:
-        terraformVersion: 'latest'
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: 'latest'
 
-    - task: AzureCLI@2
-      displayName: 'Terraform Apply'
-      inputs:
-        azureSubscription: '$(azureServiceConnection)'
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          cd $(terraformWorkingDirectory)
+          - task: AzureCLI@2
+            displayName: 'Terraform Apply'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                cd $(terraformWorkingDirectory)
 
-          terraform init -reconfigure \
-            -backend-config="resource_group_name=$(tfstateResourceGroup)" \
-            -backend-config="storage_account_name=$(tfstateStorageAccount)" \
-            -backend-config="container_name=$(tfstateContainer)" \
-            -backend-config="key=$(tfstateKey)"
+                terraform init -reconfigure \
+                  -backend-config="resource_group_name=$(tfstateResourceGroup)" \
+                  -backend-config="storage_account_name=$(tfstateStorageAccount)" \
+                  -backend-config="container_name=$(tfstateContainer)" \
+                  -backend-config="key=$(tfstateKey)"
 
-          terraform apply -auto-approve
+                terraform apply -auto-approve
 
   - stage: DeployDev
     displayName: 'Deploy to Dev AKS'
