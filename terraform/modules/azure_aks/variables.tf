@@ -15,5 +15,5 @@ variable "availability_zones" {
 
 variable "private_cluster_enabled" {
   type    = bool
-  default = false
+  default = true
 }
