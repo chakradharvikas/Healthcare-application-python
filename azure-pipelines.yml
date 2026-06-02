@@ -178,6 +178,25 @@ stages:
             displayName: 'Install Terraform'
 
           - task: AzureCLI@2
+            displayName: 'Debug Service Connection'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                echo "=== Account ==="
+                az account show
+
+                echo "=== User ==="
+                az account show --query user
+
+                echo "=== Storage Account Test ==="
+                az storage account show \
+                  --name $(tfstateStorageAccount) \
+                  --resource-group $(tfstateResourceGroup)
+
+          - task: AzureCLI@2
+            displayName: 'Terraform init and plan'
             inputs:
               azureSubscription: '$(azureServiceConnection)'
               scriptType: bash
@@ -222,7 +241,6 @@ stages:
                   -var="aks_node_vm_size=Standard_D2s_v3" \
                   -var="aks_min_count=1" \
                   -var="aks_max_count=3"
-            displayName: 'Terraform init and plan'
 
   - stage: DeployDev
     displayName: 'Deploy to Dev AKS'
