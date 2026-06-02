@@ -20,7 +20,7 @@ variable "postgres_subnet_cidr" {
 
 variable "availability_zones" {
   type    = list(string)
-  default = ["1", "2", "3"]
+  default = ["3"]
 }
 
 variable "acr_name" { type = string }
