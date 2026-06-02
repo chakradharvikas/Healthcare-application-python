@@ -9,68 +9,68 @@ pr:
       - main
 
 variables:
-  azureServiceConnection: 'healthcare_app_service_connection'
-  azureContainerRegistry: 'healthcareacrdev73383'
-  imageName: 'healthcare-app'
-  imageTag: '$(Build.SourceVersion)'
-  imageSemverTag: '1.0.$(Build.BuildId)'
-  acrLoginServer: 'healthcareacrdev73383.azurecr.io'
-  aksResourceGroupDev: 'rg-healthcare-tfplan'
-  aksClusterNameDev: 'aks-healthcare-tfplan'
-  aksResourceGroupProd: 'rg-healthcare-prod'
-  aksClusterNameProd: 'aks-healthcare-prod'
-  helmReleaseName: 'healthcare-app'
-  helmChartPath: 'charts/healthcare-app'
-  helmNamespaceDev: 'healthcare-dev'
-  helmNamespaceProd: 'healthcare-prod'
-  azAdClientId: ''
-  terraformWorkingDirectory: 'terraform/azure'
-  tfstateResourceGroup: 'rg-terraform'
-  tfstateStorageAccount: 'tfstatehealthcare01'
-  tfstateContainer: 'tfstate'
-  tfstateKey: 'healthcare-azure.tfstate'
-  
+  azureServiceConnection: "healthcare_app_service_connection"
+  azureContainerRegistry: "healthcareacr73383dev123"
+  imageName: "healthcare-app"
+  imageTag: "$(Build.SourceVersion)"
+  imageSemverTag: "1.0.$(Build.BuildId)"
+  acrLoginServer: "healthcareacr73383dev123.azurecr.io"
+  aksResourceGroupDev: "rg-healthcare-dev"
+  aksClusterNameDev: "aks-healthcare-dev"
+  aksResourceGroupProd: "rg-healthcare-prod"
+  aksClusterNameProd: "aks-healthcare-prod"
+  helmReleaseName: "healthcare-app"
+  helmChartPath: "charts/healthcare-app"
+  helmNamespaceDev: "healthcare-dev"
+  helmNamespaceProd: "healthcare-prod"
+  azAdClientId: ""
+  terraformWorkingDirectory: "terraform/azure"
+  tfstateResourceGroup: "rg-terraform"
+  tfstateStorageAccount: "tfstatehealthcare01"
+  tfstateContainer: "tfstate"
+  tfstateKey: "healthcare-azure.tfstate"
+
   # Centralized Azure Active Directory Tenant and Key Vault Names
-  tenantId: 'a784860b-041b-42c0-a9b9-557e2e721e95'
-  keyvaultName: 'hc-kv-tfplan$(Build.BuildId)'
+  tenantId: "a784860b-041b-42c0-a9b9-557e2e721e95"
+  keyvaultName: "hc-kv-tfplan$(Build.BuildId)"
 
 stages:
   - stage: Validate
-    displayName: 'Validate: Lint / Test / Security'
+    displayName: "Validate: Lint / Test / Security"
     jobs:
       - job: Validation
-        displayName: 'Code validation'
+        displayName: "Code validation"
         pool:
-          vmImage: 'ubuntu-latest'
+          vmImage: "ubuntu-latest"
         steps:
           - checkout: self
 
           - task: UsePythonVersion@0
             inputs:
-              versionSpec: '3.12'
+              versionSpec: "3.12"
               addToPath: true
 
           - script: |
               python -m pip install --upgrade pip
               pip install ruff pytest semgrep pip-audit trufflehog
               pip install -r requirements.txt
-            displayName: 'Install Python tooling and app dependencies'
+            displayName: "Install Python tooling and app dependencies"
 
           - script: |
               ruff check .
-            displayName: 'Lint Python code'
+            displayName: "Lint Python code"
 
           - script: |
               pytest -q
-            displayName: 'Run unit tests'
+            displayName: "Run unit tests"
 
           - script: |
               semgrep --config auto .
-            displayName: 'Run SAST with Semgrep'
+            displayName: "Run SAST with Semgrep"
 
           - script: |
               pip-audit --requirement requirements.txt --progress=off
-            displayName: 'Dependency scan with pip-audit'
+            displayName: "Dependency scan with pip-audit"
 
           - script: |
               sudo apt-get update -y
@@ -80,14 +80,14 @@ stages:
               sudo apt-get update -y
               sudo apt-get install -y terraform
               terraform version
-            displayName: 'Install Terraform'
+            displayName: "Install Terraform"
 
           - script: |
               cd $(terraformWorkingDirectory)
               terraform fmt -check
               terraform init -backend=false
               terraform validate
-            displayName: 'Terraform format and validate'
+            displayName: "Terraform format and validate"
 
           - script: |
               curl -sfL https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
@@ -95,50 +95,50 @@ stages:
               tfsec --soft-fail $(Build.SourcesDirectory)/terraform
               # Hard gate: fail the build on CRITICAL IaC findings in the Azure root + its modules.
               tfsec --minimum-severity CRITICAL $(Build.SourcesDirectory)/terraform/azure
-            displayName: 'IaC scan with tfsec (blocks on CRITICAL)'
+            displayName: "IaC scan with tfsec (blocks on CRITICAL)"
 
           - script: |
               curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin
               # Advisory secret scan. Justified soft-fail: the only "secret" in the tree
               # is a clearly-labeled local demo login in main.py; real secrets live in Key Vault.
               /usr/local/bin/trufflehog filesystem . --no-update --only-verified || true
-            displayName: 'Secret scan with TruffleHog'
+            displayName: "Secret scan with TruffleHog"
 
           - script: |
               git fetch origin main --depth=50 || true
               git diff origin/main...HEAD > /tmp/pr.diff || git diff HEAD~1 > /tmp/pr.diff || true
               python scripts/ai_pr_review.py < /tmp/pr.diff || true
-            displayName: 'AI-assisted PR review (non-blocking)'
+            displayName: "AI-assisted PR review (non-blocking)"
             condition: eq(variables['Build.Reason'], 'PullRequest')
 
   - stage: BuildAndPush
-    displayName: 'Build and Push Image'
+    displayName: "Build and Push Image"
     dependsOn: Validate
     jobs:
       - job: BuildImage
-        displayName: 'Docker build and push'
+        displayName: "Docker build and push"
         pool:
-          vmImage: 'ubuntu-latest'
+          vmImage: "ubuntu-latest"
         steps:
           - checkout: self
 
           - task: UsePythonVersion@0
             inputs:
-              versionSpec: '3.12'
+              versionSpec: "3.12"
               addToPath: true
 
           - script: |
               python -m pip install --upgrade pip
               pip install -r requirements.txt
-            displayName: 'Install app dependencies'
+            displayName: "Install app dependencies"
 
           - script: |
               docker build -t $(imageName):$(imageTag) .
-            displayName: 'Build Docker image'
+            displayName: "Build Docker image"
 
           - task: AzureCLI@2
             inputs:
-              azureSubscription: '$(azureServiceConnection)'
+              azureSubscription: "$(azureServiceConnection)"
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
@@ -148,27 +148,27 @@ stages:
                 docker tag $(imageName):$(imageTag) $(acrLoginServer)/$(imageName):$(imageSemverTag)
                 docker push $(acrLoginServer)/$(imageName):$(imageTag)
                 docker push $(acrLoginServer)/$(imageName):$(imageSemverTag)
-            displayName: 'Push image to ACR (Git SHA + semver tags)'
+            displayName: "Push image to ACR (Git SHA + semver tags)"
 
           - script: |
               curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
               trivy image --exit-code 1 --severity CRITICAL --ignore-unfixed $(acrLoginServer)/$(imageName):$(imageTag)
-            displayName: 'Container scan with Trivy'
+            displayName: "Container scan with Trivy"
 
   - stage: TerraformPlan
-    displayName: 'Terraform Plan'
+    displayName: "Terraform Plan"
     dependsOn: BuildAndPush
     jobs:
       - job: TerraformPlan
-        displayName: 'Terraform plan'
+        displayName: "Terraform plan"
         pool:
-          vmImage: 'ubuntu-latest'
+          vmImage: "ubuntu-latest"
         steps:
           - checkout: self
 
           - task: UsePythonVersion@0
             inputs:
-              versionSpec: '3.12'
+              versionSpec: "3.12"
               addToPath: true
 
           - script: |
@@ -179,12 +179,12 @@ stages:
               sudo apt-get update -y
               sudo apt-get install -y terraform
               terraform version
-            displayName: 'Install Terraform'
+            displayName: "Install Terraform"
 
           - task: AzureCLI@2
-            displayName: 'Debug Service Connection'
+            displayName: "Debug Service Connection"
             inputs:
-              azureSubscription: '$(azureServiceConnection)'
+              azureSubscription: "$(azureServiceConnection)"
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
@@ -200,9 +200,9 @@ stages:
                   --resource-group $(tfstateResourceGroup)
 
           - task: AzureCLI@2
-            displayName: 'Terraform init and plan'
+            displayName: "Terraform init and plan"
             inputs:
-              azureSubscription: '$(azureServiceConnection)'
+              azureSubscription: "$(azureServiceConnection)"
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
@@ -211,7 +211,7 @@ stages:
 
                 rm -rf .terraform
                 rm -f .terraform.lock.hcl
-                
+
                 terraform init -reconfigure \
                   -backend-config="resource_group_name=$(tfstateResourceGroup)" \
                   -backend-config="storage_account_name=$(tfstateStorageAccount)" \
@@ -247,22 +247,22 @@ stages:
                   -var="aks_max_count=3"
 
   - stage: TerraformApply
-    displayName: 'Terraform Apply'
+    displayName: "Terraform Apply"
     dependsOn: TerraformPlan
     condition: succeeded()
 
     jobs:
       - job: TerraformApply
-        displayName: 'Apply Infrastructure'
+        displayName: "Apply Infrastructure"
         pool:
-          vmImage: 'ubuntu-latest'
+          vmImage: "ubuntu-latest"
 
         steps:
           - checkout: self
 
           - task: UsePythonVersion@0
             inputs:
-              versionSpec: '3.12'
+              versionSpec: "3.12"
               addToPath: true
 
           - script: |
@@ -273,12 +273,12 @@ stages:
               sudo apt-get update -y
               sudo apt-get install -y terraform
               terraform version
-            displayName: 'Install Terraform'
+            displayName: "Install Terraform"
 
           - task: AzureCLI@2
-            displayName: 'Terraform Apply'
+            displayName: "Terraform Apply"
             inputs:
-              azureSubscription: '$(azureServiceConnection)'
+              azureSubscription: "$(azureServiceConnection)"
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
@@ -320,14 +320,14 @@ stages:
                   -var="aks_max_count=3"
 
   - stage: DeployDev
-    displayName: 'Deploy to Dev AKS'
+    displayName: "Deploy to Dev AKS"
     dependsOn: TerraformApply
     jobs:
       - deployment: DeployDev
-        displayName: 'Deploy to development AKS'
-        environment: 'dev-aks'
+        displayName: "Deploy to development AKS"
+        environment: "dev-aks"
         pool:
-          name: 'Default'
+          vmImage: "ubuntu-latest"
         strategy:
           runOnce:
             deploy:
@@ -336,7 +336,7 @@ stages:
 
                 - task: AzureCLI@2
                   inputs:
-                    azureSubscription: '$(azureServiceConnection)'
+                    azureSubscription: "$(azureServiceConnection)"
                     scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
@@ -350,29 +350,29 @@ stages:
                         --set image.repository=$(acrLoginServer)/$(imageName) \
                         --set image.tag=$(imageTag) \
                         || { echo "Helm upgrade failed; attempting rollback"; helm rollback $(helmReleaseName) -n $(helmNamespaceDev) || true; exit 1; }
-                  displayName: 'Deploy Helm chart to AKS Dev (with rollback)'
+                  displayName: "Deploy Helm chart to AKS Dev (with rollback)"
 
   - stage: Approval
-    displayName: 'Manual Approval for Prod'
+    displayName: "Manual Approval for Prod"
     dependsOn: DeployDev
     jobs:
       - job: WaitForApproval
         pool:
-          name: 'Default'
+          vmImage: "ubuntu-latest"
         steps:
           - script: |
               echo "Manual approval placeholder: please verify the dev deployment before proceeding to prod."
-            displayName: 'Approval placeholder'
+            displayName: "Approval placeholder"
 
   - stage: DeployProd
-    displayName: 'Deploy to Prod AKS'
+    displayName: "Deploy to Prod AKS"
     dependsOn: Approval
     jobs:
       - deployment: DeployProd
-        displayName: 'Deploy to production AKS'
-        environment: 'prod-aks'
+        displayName: "Deploy to production AKS"
+        environment: "prod-aks"
         pool:
-          name: 'Default'
+          vmImage: "ubuntu-latest"
         strategy:
           runOnce:
             deploy:
@@ -381,7 +381,7 @@ stages:
 
                 - task: AzureCLI@2
                   inputs:
-                    azureSubscription: '$(azureServiceConnection)'
+                    azureSubscription: "$(azureServiceConnection)"
                     scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
@@ -395,4 +395,4 @@ stages:
                         --set image.repository=$(acrLoginServer)/$(imageName) \
                         --set image.tag=$(imageTag) \
                         || { echo "Helm upgrade failed; attempting rollback"; helm rollback $(helmReleaseName) -n $(helmNamespaceProd) || true; exit 1; }
-                  displayName: 'Deploy Helm chart to AKS Prod (with rollback)'
+                  displayName: "Deploy Helm chart to AKS Prod (with rollback)"
