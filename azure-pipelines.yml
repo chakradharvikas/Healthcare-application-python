@@ -178,17 +178,31 @@ stages:
             displayName: 'Install Terraform'
 
           - task: AzureCLI@2
+            displayName: 'Terraform init and plan'
             inputs:
               azureSubscription: '$(azureServiceConnection)'
               scriptType: bash
               scriptLocation: inlineScript
+              addSpnToEnvironment: true
               inlineScript: |
+                # 🔥 Export Service Principal credentials for Terraform azurerm provider
+                export ARM_CLIENT_ID="$servicePrincipalId"
+                export ARM_CLIENT_SECRET="$servicePrincipalKey"
+                export ARM_TENANT_ID="$tenantId"
+                export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+                
+                echo "✅ Authenticating Terraform with Service Principal: $ARM_CLIENT_ID"
                 az account show
+                
                 cd $(terraformWorkingDirectory)
-                terraform init -backend-config="resource_group_name=$(tfstateResourceGroup)" \
+                
+                terraform init \
+                  -backend-config="resource_group_name=$(tfstateResourceGroup)" \
                   -backend-config="storage_account_name=$(tfstateStorageAccount)" \
                   -backend-config="container_name=$(tfstateContainer)" \
-                  -backend-config="key=$(tfstateKey)"
+                  -backend-config="key=$(tfstateKey)" \
+                  -reconfigure
+                
                 terraform plan -out=tfplan \
                   -var="environment=dev" \
                   -var="prefix=healthcare" \
@@ -217,7 +231,13 @@ stages:
                   -var="aks_node_vm_size=Standard_D2s_v3" \
                   -var="aks_min_count=1" \
                   -var="aks_max_count=3"
-            displayName: 'Terraform init and plan'
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Terraform plan artifact'
+            inputs:
+              targetPath: '$(terraformWorkingDirectory)/tfplan'
+              artifact: 'tfplan'
+              publishLocation: 'pipeline'
 
   - stage: DeployDev
     displayName: 'Deploy to Dev AKS'
@@ -296,4 +316,3 @@ stages:
                         --set image.tag=$(imageTag) \
                         || { echo "Helm upgrade failed; attempting rollback"; helm rollback $(helmReleaseName) -n $(helmNamespaceProd) || true; exit 1; }
                   displayName: 'Deploy Helm chart to AKS Prod (with rollback)'
-
