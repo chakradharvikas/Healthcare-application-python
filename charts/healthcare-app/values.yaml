@@ -52,7 +52,7 @@ workloadIdentity:
 
 keyvault:
   name: hc-kv-dev-733833
-  tenantId: "a90a3e51-3c2e-4181-9600-bc0e180533e9"
+  tenantId: "a784860b-041b-42c0-a9b9-557e2e721e95"
   # AAD client id used by the CSI provider via Workload Identity (set per environment).
   clientId: ""
   objects:
