@@ -17,11 +17,11 @@ resource "azurerm_key_vault" "kv" {
   }
 }
 
-resource "azurerm_key_vault_secret" "db_password" {
-  name         = var.secret_name
-  value        = var.secret_value
-  key_vault_id = azurerm_key_vault.kv.id
-}
+#resource "azurerm_key_vault_secret" "db_password" {
+#  name         = var.secret_name
+#  value        = var.secret_value
+#  key_vault_id = azurerm_key_vault.kv.id
+#}
 
 output "key_vault_id" {
   value = azurerm_key_vault.kv.id
