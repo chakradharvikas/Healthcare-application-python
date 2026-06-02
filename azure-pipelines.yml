@@ -1,12 +1,12 @@
 trigger:
   branches:
     include:
-      - main
+      - 
 
 pr:
   branches:
     include:
-      - main
+      - 
 
 variables:
   azureServiceConnection: 'healthcare_app_service_connection'
