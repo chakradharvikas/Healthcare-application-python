@@ -417,9 +417,7 @@ stages:
 
                 # ===== MAIN DEPLOYMENT STEP =====
                 - task: AzureCLI@2
-                  displayName: "Deploy Helm chart to AKS Dev (with rollback)"
-                  env:
-                    AZURE_CLI_DISABLE_KUBELOGIN: '1'
+                  displayName: "Deploy Helm chart to AKS Dev"
                   inputs:
                     azureSubscription: "$(azureServiceConnection)"
                     scriptType: bash
@@ -427,34 +425,31 @@ stages:
                     inlineScript: |
                       set -e
                       
-                      echo "Setting up AKS credentials..."
+                      # Get cluster credentials with admin cert (no kubelogin)
+                      echo "Getting AKS admin credentials..."
                       az aks get-credentials \
                         --resource-group $(aksResourceGroupDev) \
                         --name $(aksClusterNameDev) \
-                        --overwrite-existing \
                         --admin \
-                        --file kubeconfig.yaml
+                        -f /tmp/kubeconfig.yaml 2>&1 | grep -v kubelogin || true
                       
-                      export KUBECONFIG=$(pwd)/kubeconfig.yaml
+                      # Use the generated kubeconfig
+                      export KUBECONFIG=/tmp/kubeconfig.yaml
                       
-                      echo "Verifying tools..."
+                      # Verify connection
+                      echo "Testing Kubernetes connection..."
                       kubectl cluster-info
-                      kubectl version --client
-                      helm version
                       
-                      echo "Deploying Helm chart to Dev namespace: $(helmNamespaceDev)..."
+                      # Deploy with Helm
+                      echo "Deploying application..."
                       helm upgrade --install $(helmReleaseName) $(helmChartPath) \
+                        --kubeconfig=/tmp/kubeconfig.yaml \
                         --namespace $(helmNamespaceDev) \
                         --create-namespace \
                         --set image.repository=$(acrLoginServer)/$(imageName) \
                         --set image.tag=$(imageTag) \
                         --wait \
-                        --timeout 5m || \
-                      { 
-                        echo "Helm upgrade failed; attempting rollback..."
-                        helm rollback $(helmReleaseName) -n $(helmNamespaceDev) || true
-                        exit 1
-                      }
+                        --timeout 5m
                       
                       echo "✅ Dev deployment successful!"
 
@@ -530,9 +525,7 @@ stages:
 
                 # ===== MAIN DEPLOYMENT STEP (PROD) =====
                 - task: AzureCLI@2
-                  displayName: "Deploy Helm chart to AKS Prod (with rollback)"
-                  env:
-                    AZURE_CLI_DISABLE_KUBELOGIN: '1'
+                  displayName: "Deploy Helm chart to AKS Prod"
                   inputs:
                     azureSubscription: "$(azureServiceConnection)"
                     scriptType: bash
@@ -540,33 +533,30 @@ stages:
                     inlineScript: |
                       set -e
                       
-                      echo "Setting up AKS credentials..."
+                      # Get cluster credentials with admin cert (no kubelogin)
+                      echo "Getting AKS admin credentials..."
                       az aks get-credentials \
                         --resource-group $(aksResourceGroupProd) \
                         --name $(aksClusterNameProd) \
-                        --overwrite-existing \
                         --admin \
-                        --file kubeconfig.yaml
+                        -f /tmp/kubeconfig.yaml 2>&1 | grep -v kubelogin || true
                       
-                      export KUBECONFIG=$(pwd)/kubeconfig.yaml
+                      # Use the generated kubeconfig
+                      export KUBECONFIG=/tmp/kubeconfig.yaml
                       
-                      echo "Verifying tools..."
+                      # Verify connection
+                      echo "Testing Kubernetes connection..."
                       kubectl cluster-info
-                      kubectl version --client
-                      helm version
                       
-                      echo "Deploying Helm chart to Prod namespace: $(helmNamespaceProd)..."
+                      # Deploy with Helm
+                      echo "Deploying application..."
                       helm upgrade --install $(helmReleaseName) $(helmChartPath) \
+                        --kubeconfig=/tmp/kubeconfig.yaml \
                         --namespace $(helmNamespaceProd) \
                         --create-namespace \
                         --set image.repository=$(acrLoginServer)/$(imageName) \
                         --set image.tag=$(imageTag) \
                         --wait \
-                        --timeout 5m || \
-                      { 
-                        echo "Helm upgrade failed; attempting rollback..."
-                        helm rollback $(helmReleaseName) -n $(helmNamespaceProd) || true
-                        exit 1
-                      }
+                        --timeout 5m
                       
                       echo "✅ Production deployment successful!"
