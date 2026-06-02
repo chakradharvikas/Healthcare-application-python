@@ -238,9 +238,42 @@ stages:
                   -var="postgres_database_name=healthcare" \
                   -var="aks_cluster_name=aks-healthcare-tfplan" \
                   -var="aks_node_count=1" \
-                  -var="aks_node_vm_size=Standard_D2s_v3" \
+                  -var="aks_node_vm_size=Standard_DC2s_v3" \
                   -var="aks_min_count=1" \
                   -var="aks_max_count=3"
+
+  - stage: TerraformApply
+    displayName: 'Terraform Apply'
+    dependsOn: TerraformPlan
+    condition: succeeded()
+
+    jobs:
+    - job: TerraformApply
+      displayName: 'Apply Infrastructure'
+
+    steps:
+    - checkout: self
+
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: 'latest'
+
+    - task: AzureCLI@2
+      displayName: 'Terraform Apply'
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          cd $(terraformWorkingDirectory)
+
+          terraform init -reconfigure \
+            -backend-config="resource_group_name=$(tfstateResourceGroup)" \
+            -backend-config="storage_account_name=$(tfstateStorageAccount)" \
+            -backend-config="container_name=$(tfstateContainer)" \
+            -backend-config="key=$(tfstateKey)"
+
+          terraform apply -auto-approve
 
   - stage: DeployDev
     displayName: 'Deploy to Dev AKS'
