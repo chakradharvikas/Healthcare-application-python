@@ -16,7 +16,7 @@ vnet_cidr            = "10.20.0.0/16"
 private_subnet_cidr  = "10.20.1.0/24"
 public_subnet_cidr   = "10.20.2.0/24"
 postgres_subnet_cidr = "10.20.3.0/24"
-availability_zones   = ["1", "2", "3"]
+availability_zones   = ["3"]
 
 acr_name = "healthcareacrdevtf"
 acr_sku  = "Standard"
