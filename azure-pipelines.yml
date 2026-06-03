@@ -1,12 +1,12 @@
 trigger:
   branches:
     include:
-      - 
+      - main
 
 pr:
   branches:
     include:
-      - 
+      - main
 
 variables:
   azureServiceConnection: 'healthcare_app_service_connection'
@@ -36,6 +36,7 @@ variables:
   sonarQubeServiceConnection: 'Healthcare_sonarqube'
   sonarQubeProjectKey: 'Healthcare-application'
   sonarQubeProjectName: 'Healthcare-Application'
+  sonarHostUrl: 'http://4.222.216.160/:9000'
 
 stages:
   - stage: Validate
@@ -122,6 +123,22 @@ stages:
               publishRunAttachments: true
               failTaskOnFailedTests: false
 
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Unit Test XML Report"
+            condition: always()
+            inputs:
+              pathToPublish: 'junit'
+              artifactName: 'unit-test-reports'
+              publishLocation: 'Container'
+
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Coverage XML Report"
+            condition: always()
+            inputs:
+              pathToPublish: 'coverage.xml'
+              artifactName: 'coverage-reports'
+              publishLocation: 'Container'
+
           - script: |
               echo "Repository structure"
               find . -type f | sort
@@ -151,6 +168,20 @@ stages:
             displayName: "SonarQube Publish Quality Gate Result"
             inputs:
               pollingTimeoutSec: '300'
+
+          - script: |
+              mkdir -p sonar-reports
+              curl -s -u "$(SONAR_TOKEN):" "$(sonarHostUrl)/api/issues/search?componentKeys=$(sonarQubeProjectKey)&ps=500" -o sonar-reports/sonarqube-report.json
+              cp sonar-reports/sonarqube-report.json sonar-reports/sonarqube-report.txt
+            displayName: "Export SonarQube Reports"
+
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish SonarQube Reports"
+            condition: always()
+            inputs:
+              pathToPublish: 'sonar-reports'
+              artifactName: 'sonarqube-reports'
+              publishLocation: 'Container'
 
   - stage: BuildAndPush
     displayName: "Build and Push Image"
