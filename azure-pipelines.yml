@@ -171,9 +171,24 @@ stages:
 
           - script: |
               mkdir -p sonar-reports
-              curl -s -u "$(SONAR_TOKEN):" "$(sonarHostUrl)/api/issues/search?componentKeys=$(sonarQubeProjectKey)&ps=500" -o sonar-reports/sonarqube-report.json
-              cp sonar-reports/sonarqube-report.json sonar-reports/sonarqube-report.txt
+
+              echo "Testing SonarQube connection..."
+
+              curl -v -u "$(SONAR_TOKEN):" \
+                "$(sonarHostUrl)/api/issues/search?componentKeys=$(sonarQubeProjectKey)&ps=500" \
+                -o sonar-reports/sonarqube-report.json || true
+
+              if [ -f sonar-reports/sonarqube-report.json ]; then
+                cp sonar-reports/sonarqube-report.json sonar-reports/sonarqube-report.txt
+                echo "Report generated"
+                ls -la sonar-reports
+              else
+                echo "Failed to generate report"
+                mkdir -p sonar-reports
+                echo "No report generated" > sonar-reports/sonarqube-report.txt
+              fi
             displayName: "Export SonarQube Reports"
+            condition: always()
 
           - task: PublishBuildArtifacts@1
             displayName: "Publish SonarQube Reports"
