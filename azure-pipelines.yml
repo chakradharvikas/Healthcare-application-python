@@ -122,8 +122,13 @@ stages:
               publishRunAttachments: true
               failTaskOnFailedTests: false
 
+          - script: |
+              echo "Repository structure"
+              find . -type f | sort
+            displayName: "Debug Files"
+
           # ===== NEW: SONARQUBE SCANNER - PREPARE ANALYSIS =====
-          - task: SonarQubePrepare@7
+          - task: SonarQubePrepare@5
             displayName: "SonarQube Prepare Analysis Configuration"
             inputs:
               SonarQube: '$(sonarQubeServiceConnection)'
@@ -131,18 +136,18 @@ stages:
               configMode: 'manual'
               cliProjectKey: '$(sonarQubeProjectKey)'
               cliProjectName: '$(sonarQubeProjectName)'
-              cliSources: '.'
+              cliSources: 'src'
               extraProperties: |
                 sonar.python.coverage.reportPaths=coverage.xml
                 sonar.python.xunit.reportPath=junit/test-results.xml
                 sonar.exclusions=**/*_test.py,**/tests/**
 
           # ===== NEW: SONARQUBE SCANNER - RUN ANALYSIS =====
-          - task: SonarQubeAnalyze@7
+          - task: SonarQubeAnalyze@5
             displayName: "SonarQube Run Code Analysis"
 
           # ===== NEW: SONARQUBE SCANNER - PUBLISH QUALITY GATE =====
-          - task: SonarQubePublish@7
+          - task: SonarQubePublish@5
             displayName: "SonarQube Publish Quality Gate Result"
             inputs:
               pollingTimeoutSec: '300'
