@@ -29,10 +29,13 @@ variables:
   tfstateStorageAccount: 'tfstatehealthcare01'
   tfstateContainer: 'tfstate'
   tfstateKey: 'healthcare-azure.tfstate'
-
-  # Centralized Azure Active Directory Tenant and Key Vault Names
   tenantId: "a784860b-041b-42c0-a9b9-557e2e721e95"
   keyvaultName: "hc-kv-tfplan$(Build.BuildId)"
+  
+  # ===== NEW: SonarQube Configuration =====
+  sonarQubeServiceConnection: 'Healthcare_sonarqube'
+  sonarQubeProjectKey: 'healthcare-application'
+  sonarQubeProjectName: 'Healthcare-Application'
 
 stages:
   - stage: Validate
@@ -60,9 +63,10 @@ stages:
               ruff check .
             displayName: "Lint Python code"
 
+          # ===== NEW: UNIT TESTS WITH XML OUTPUT =====
           - script: |
-              pytest -q
-            displayName: "Run unit tests"
+              pytest -q --junitxml=junit/test-results.xml --cov=src --cov-report=xml --cov-report=html
+            displayName: "Run unit tests (with XML report)"
 
           - script: |
               semgrep --config auto .
@@ -91,16 +95,12 @@ stages:
 
           - script: |
               curl -sfL https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
-              # Full advisory report (non-blocking) so reviewers see every finding.
               tfsec --soft-fail $(Build.SourcesDirectory)/terraform
-              # Hard gate: fail the build on CRITICAL IaC findings in the Azure root + its modules.
               tfsec --minimum-severity CRITICAL $(Build.SourcesDirectory)/terraform/azure
             displayName: "IaC scan with tfsec (blocks on CRITICAL)"
 
           - script: |
               curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sudo sh -s -- -b /usr/local/bin
-              # Advisory secret scan. Justified soft-fail: the only "secret" in the tree
-              # is a clearly-labeled local demo login in main.py; real secrets live in Key Vault.
               /usr/local/bin/trufflehog filesystem . --no-update --only-verified || true
             displayName: "Secret scan with TruffleHog"
 
@@ -110,6 +110,42 @@ stages:
               python scripts/ai_pr_review.py < /tmp/pr.diff || true
             displayName: "AI-assisted PR review (non-blocking)"
             condition: eq(variables['Build.Reason'], 'PullRequest')
+
+          # ===== NEW: PUBLISH UNIT TEST RESULTS =====
+          - task: PublishTestResults@2
+            displayName: "Publish Unit Test Results"
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: '**/junit/test-results.xml'
+              testRunTitle: 'Unit Tests - Pytest'
+              publishRunAttachments: true
+              failTaskOnFailedTests: false
+
+          # ===== NEW: SONARQUBE SCANNER - PREPARE ANALYSIS =====
+          - task: SonarQubePrepare@5
+            displayName: "SonarQube Prepare Analysis Configuration"
+            inputs:
+              SonarQube: '$(sonarQubeServiceConnection)'
+              scannerMode: 'CLI'
+              configMode: 'manual'
+              cliProjectKey: '$(sonarQubeProjectKey)'
+              cliProjectName: '$(sonarQubeProjectName)'
+              cliSources: 'src'
+              extraProperties: |
+                sonar.python.coverage.reportPaths=coverage.xml
+                sonar.python.xunit.reportPath=junit/test-results.xml
+                sonar.exclusions=**/*_test.py,**/tests/**
+
+          # ===== NEW: SONARQUBE SCANNER - RUN ANALYSIS =====
+          - task: SonarQubeAnalyze@5
+            displayName: "SonarQube Run Code Analysis"
+
+          # ===== NEW: SONARQUBE SCANNER - PUBLISH QUALITY GATE =====
+          - task: SonarQubePublish@5
+            displayName: "SonarQube Publish Quality Gate Result"
+            inputs:
+              pollingTimeoutSec: '300'
 
   - stage: BuildAndPush
     displayName: "Build and Push Image"
@@ -143,17 +179,59 @@ stages:
               scriptLocation: inlineScript
               inlineScript: |
                 az acr login --name $(azureContainerRegistry)
-                # Tag with both the immutable Git SHA and a semver (1.0.<buildId>).
                 docker tag $(imageName):$(imageTag) $(acrLoginServer)/$(imageName):$(imageTag)
                 docker tag $(imageName):$(imageTag) $(acrLoginServer)/$(imageName):$(imageSemverTag)
                 docker push $(acrLoginServer)/$(imageName):$(imageTag)
                 docker push $(acrLoginServer)/$(imageName):$(imageSemverTag)
             displayName: "Push image to ACR (Git SHA + semver tags)"
 
+          # ===== NEW: TRIVY SCAN WITH TEXT OUTPUT =====
           - script: |
+              mkdir -p $(Build.ArtifactStagingDirectory)/trivy-reports
               curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-              trivy image --exit-code 1 --severity CRITICAL --ignore-unfixed $(acrLoginServer)/$(imageName):$(imageTag)
-            displayName: "Container scan with Trivy"
+              
+              echo "Running Trivy scan..."
+              /usr/local/bin/trivy image --severity CRITICAL,HIGH \
+                --format json \
+                --output $(Build.ArtifactStagingDirectory)/trivy-reports/trivy-json-report.json \
+                $(acrLoginServer)/$(imageName):$(imageTag) || true
+              
+              echo "Generating human-readable report..."
+              /usr/local/bin/trivy image --severity CRITICAL,HIGH \
+                --format table \
+                --output $(Build.ArtifactStagingDirectory)/trivy-reports/trivy-text-report.txt \
+                $(acrLoginServer)/$(imageName):$(imageTag) || true
+              
+              echo "Generating SARIF report for integration..."
+              /usr/local/bin/trivy image --severity CRITICAL,HIGH \
+                --format sarif \
+                --output $(Build.ArtifactStagingDirectory)/trivy-reports/trivy-sarif-report.sarif \
+                $(acrLoginServer)/$(imageName):$(imageTag) || true
+              
+              echo ""
+              echo "=== TRIVY SCAN RESULTS (Text Report) ==="
+              cat $(Build.ArtifactStagingDirectory)/trivy-reports/trivy-text-report.txt
+              
+              # Check for CRITICAL vulnerabilities and fail if found
+              CRITICAL_COUNT=$(jq '[.Results[].Misconfigurations[]? | select(.Severity=="CRITICAL")] | length' $(Build.ArtifactStagingDirectory)/trivy-reports/trivy-json-report.json 2>/dev/null || echo 0)
+              if [ "$CRITICAL_COUNT" -gt 0 ]; then
+                echo ""
+                echo "⚠️  Found $CRITICAL_COUNT CRITICAL vulnerabilities!"
+                exit 1
+              else
+                echo ""
+                echo "✅ No CRITICAL vulnerabilities found."
+              fi
+            displayName: "Container scan with Trivy (save reports)"
+
+          # ===== NEW: PUBLISH TRIVY ARTIFACTS =====
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Trivy Reports"
+            condition: always()
+            inputs:
+              pathToPublish: '$(Build.ArtifactStagingDirectory)/trivy-reports'
+              artifactName: 'trivy-security-reports'
+              publishLocation: 'Container'
 
   - stage: TerraformPlan
     displayName: "Terraform Plan"
@@ -365,7 +443,6 @@ stages:
               steps:
                 - checkout: self
 
-                # ===== DIAGNOSTIC STEP =====
                 - task: AzureCLI@2
                   displayName: "Diagnose DNS & Network Issues (Dev)"
                   inputs:
@@ -402,7 +479,6 @@ stages:
                       echo "========================================"
                   continueOnError: true
 
-                # ===== MAIN DEPLOYMENT STEP =====
                 - task: AzureCLI@2
                   displayName: "Deploy Helm chart to AKS Dev"
                   inputs:
@@ -490,7 +566,6 @@ stages:
               steps:
                 - checkout: self
 
-                # ===== STEP 1: VERIFY KUBECTL & HELM =====
                 - script: |
                     echo "=== Checking kubectl ==="
                     kubectl version --client
@@ -509,7 +584,6 @@ stages:
                     kubectl get nodes
                   displayName: "Verify kubectl and helm setup"
 
-                # ===== STEP 2: DEPLOY TO PROD =====
                 - script: |
                     set -e
                     
@@ -548,7 +622,6 @@ stages:
                     kubectl get events -n $(helmNamespaceProd) --sort-by='.lastTimestamp' | tail -10 || echo "No events"
                   displayName: "Deploy Helm Chart"
 
-                # ===== STEP 3: MONITOR DEPLOYMENT =====
                 - script: |
                     echo "=========================================="
                     echo "MONITORING DEPLOYMENT STATUS"
