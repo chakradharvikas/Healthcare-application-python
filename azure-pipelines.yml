@@ -131,13 +131,7 @@ stages:
               artifactName: 'unit-test-reports'
               publishLocation: 'Container'
 
-          - task: PublishBuildArtifacts@1
-            displayName: "Publish Coverage XML Report"
-            condition: always()
-            inputs:
-              pathToPublish: 'coverage.xml'
-              artifactName: 'coverage-reports'
-              publishLocation: 'Container'
+          
 
           - script: |
               echo "Repository structure"
