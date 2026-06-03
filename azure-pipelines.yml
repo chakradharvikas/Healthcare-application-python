@@ -34,7 +34,7 @@ variables:
   
   # ===== NEW: SonarQube Configuration =====
   sonarQubeServiceConnection: 'Healthcare_sonarqube'
-  sonarQubeProjectKey: 'healthcare-application'
+  sonarQubeProjectKey: 'Healthcare-Application'
   sonarQubeProjectName: 'Healthcare-Application'
 
 stages:
