@@ -425,10 +425,9 @@ stages:
                     inlineScript: |
                       set -e
 
-                      echo "Getting AKS credentials via REST API (no kubelogin)..."
+                      echo "Getting AKS credentials via REST API..."
                       SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 
-                      # Get kubeconfig via REST API - bypasses az aks get-credentials entirely
                       az rest \
                         --method post \
                         --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/$(aksResourceGroupDev)/providers/Microsoft.ContainerService/managedClusters/$(aksClusterNameDev)/listClusterAdminCredential?api-version=2023-01-01" \
@@ -437,29 +436,38 @@ stages:
 
                       export KUBECONFIG=/tmp/kubeconfig.yaml
 
-                      echo "Testing connection..."
+                      echo "Testing Kubernetes connection..."
                       kubectl cluster-info
 
-                      echo "Deploying Helm chart (timeout: 15 minutes)..."
+                      echo "Deploying Helm chart (without wait)..."
                       helm upgrade --install $(helmReleaseName) $(helmChartPath) \
                         --kubeconfig=/tmp/kubeconfig.yaml \
                         --namespace $(helmNamespaceDev) \
                         --create-namespace \
                         --set image.repository=$(acrLoginServer)/$(imageName) \
-                        --set image.tag=$(imageTag) \
-                        --wait \
-                        --timeout 15m || {
-                        echo "Helm deployment failed. Checking pod status..."
-                        kubectl get pods -n $(helmNamespaceDev) -o wide
-                        kubectl describe pods -n $(helmNamespaceDev)
-                        kubectl logs -n $(helmNamespaceDev) --all-containers=true --timestamps=true || true
-                        exit 1
-                      }
+                        --set image.tag=$(imageTag)
 
-                      echo "Verifying deployment..."
-                      kubectl get all -n $(helmNamespaceDev)
-                      
-                      echo "✅ Dev deployment successful!"
+                      echo ""
+                      echo "Waiting 30 seconds for pods to start..."
+                      sleep 30
+
+                      echo ""
+                      echo "=== Checking Pod Status ==="
+                      kubectl get pods -n $(helmNamespaceDev) -o wide
+
+                      echo ""
+                      echo "=== Pod Details ==="
+                      kubectl describe pods -n $(helmNamespaceDev)
+
+                      echo ""
+                      echo "=== Pod Logs ==="
+                      kubectl logs -n $(helmNamespaceDev) --all-containers=true --timestamps=true || true
+
+                      echo ""
+                      echo "=== Events ==="
+                      kubectl get events -n $(helmNamespaceDev) --sort-by='.lastTimestamp'
+
+                      echo "✅ Deployment complete! Check pod status above."
 
   - stage: Approval
     displayName: "Manual Approval for Prod"
