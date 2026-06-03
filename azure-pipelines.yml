@@ -132,11 +132,11 @@ stages:
             displayName: "SonarQube Prepare Analysis Configuration"
             inputs:
               SonarQube: '$(sonarQubeServiceConnection)'
-              scannerMode: '.'
+              scannerMode: 'CLI'
               configMode: 'manual'
               cliProjectKey: '$(sonarQubeProjectKey)'
               cliProjectName: '$(sonarQubeProjectName)'
-              cliSources: 'src'
+              cliSources: '.'
               extraProperties: |
                 sonar.python.coverage.reportPaths=coverage.xml
                 sonar.python.xunit.reportPath=junit/test-results.xml
