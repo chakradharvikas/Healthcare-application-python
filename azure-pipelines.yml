@@ -539,6 +539,27 @@ stages:
                       echo "========================================"
                   continueOnError: true
 
+                - task: AzureCLI@2
+                  displayName: "Install Secrets Store CSI Driver"
+                  inputs:
+                    azureSubscription: "$(azureServiceConnection)"
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      export KUBECONFIG=/tmp/kubeconfig.yaml
+                      
+                      echo "Installing Secrets Store CSI Driver..."
+                      helm repo add secrets-store-csi-driver https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
+                      helm repo update
+                      helm install csi-secrets-store secrets-store-csi-driver/secrets-store-csi-driver \
+                        --namespace kube-system --wait
+                      
+                      echo "Installing Azure Key Vault Provider..."
+                      helm repo add azure https://raw.githubusercontent.com/Azure/secrets-store-csi-driver-provider-azure/master/charts
+                      helm repo update
+                      helm install azure-provider azure/azure-secrets-store-csi-driver-provider \
+                        --namespace kube-system --wait
+
                 # ===== MAIN DEPLOYMENT STEP (PROD) =====
                 - task: AzureCLI@2
                   displayName: "Deploy Helm chart to AKS Prod"
