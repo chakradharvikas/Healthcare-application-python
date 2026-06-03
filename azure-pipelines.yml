@@ -358,7 +358,7 @@ stages:
         displayName: "Deploy to development AKS"
         environment: "dev-aks"
         pool:
-          name: "sonarqube-vm"
+          name: "Default"
         strategy:
           runOnce:
             deploy:
@@ -483,7 +483,7 @@ stages:
         displayName: "Deploy to production AKS"
         environment: "prod-aks"
         pool:
-          name: "sonarqube-vm"
+          name: "Default"
         strategy:
           runOnce:
             deploy:
