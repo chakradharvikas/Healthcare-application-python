@@ -358,7 +358,7 @@ stages:
         displayName: "Deploy to development AKS"
         environment: "dev-aks"
         pool:
-          name: "Default"
+          name: "sonarqube-vm"
         strategy:
           runOnce:
             deploy:
@@ -483,204 +483,102 @@ stages:
         displayName: "Deploy to production AKS"
         environment: "prod-aks"
         pool:
-          name: "Default"
+          name: "sonarqube-vm"
         strategy:
           runOnce:
             deploy:
               steps:
                 - checkout: self
 
-                # ===== STEP 1: GET KUBECONFIG =====
-                - task: AzureCLI@2
-                  displayName: "Get AKS Credentials (Prod)"
-                  inputs:
-                    azureSubscription: "$(azureServiceConnection)"
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      set -e
-                      
-                      echo "Getting AKS admin credentials..."
-                      SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-                      
-                      az rest \
-                        --method post \
-                        --url "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/$(aksResourceGroupProd)/providers/Microsoft.ContainerService/managedClusters/$(aksClusterNameProd)/listClusterAdminCredential?api-version=2023-01-01" \
-                        --query "kubeconfigs[0].value" \
-                        -o tsv | base64 -d > /tmp/kubeconfig-prod.yaml
-                      
-                      chmod 600 /tmp/kubeconfig-prod.yaml
-                      echo "✅ Kubeconfig saved"
+                # ===== STEP 1: VERIFY KUBECTL & HELM =====
+                - script: |
+                    echo "=== Checking kubectl ==="
+                    kubectl version --client
+                    
+                    echo ""
+                    echo "=== Checking helm ==="
+                    helm version
+                    
+                    echo ""
+                    echo "=== Checking kubeconfig ==="
+                    ls -la ~/.kube/config || echo "⚠️ No kubeconfig found"
+                    
+                    echo ""
+                    echo "=== Verifying cluster connection ==="
+                    kubectl cluster-info
+                    kubectl get nodes
+                  displayName: "Verify kubectl and helm setup"
 
-                # ===== DIAGNOSTIC STEP (PROD) =====
-                - task: AzureCLI@2
-                  displayName: "Diagnose DNS & Network Issues (Prod)"
-                  inputs:
-                    azureSubscription: "$(azureServiceConnection)"
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      export KUBECONFIG=/tmp/kubeconfig-prod.yaml
-                      
-                      echo "========================================"
-                      echo "  DNS & NETWORK DIAGNOSTICS (Prod)"
-                      echo "========================================"
-                      
-                      echo ""
-                      echo "=== 1. DNS Configuration ==="
-                      cat /etc/resolv.conf
-                      
-                      echo ""
-                      echo "=== 2. Agent Network Configuration ==="
-                      echo "Hostname: $(hostname)"
-                      hostname -I
-                      
-                      echo ""
-                      echo "=== 3. Routing Table ==="
-                      ip route
-                      
-                      echo ""
-                      echo "=== 4. Kubernetes Cluster Info ==="
-                      kubectl cluster-info || echo "⚠️ Unable to connect to cluster"
-                      
-                      echo ""
-                      echo "=== 5. Azure Subscription Info ==="
-                      az account show --query "{Subscription: name, TenantId: tenantId}"
-                      
-                      echo ""
-                      echo "========================================"
-                  continueOnError: true
+                # ===== STEP 2: DEPLOY TO PROD =====
+                - script: |
+                    set -e
+                    
+                    echo "=========================================="
+                    echo "DEPLOYING TO PRODUCTION AKS"
+                    echo "=========================================="
+                    
+                    echo ""
+                    echo "Deploying Helm chart..."
+                    helm upgrade --install $(helmReleaseName) $(helmChartPath) \
+                      --namespace $(helmNamespaceProd) \
+                      --create-namespace \
+                      --set image.repository=$(acrLoginServer)/$(imageName) \
+                      --set image.tag=$(imageTag) \
+                      --values $(helmChartPath)/values-prod.yaml \
+                      --wait=false \
+                      --timeout 5m
+                    
+                    echo ""
+                    echo "✅ Helm chart deployed!"
+                    
+                    echo ""
+                    echo "Waiting 30 seconds for pods to initialize..."
+                    sleep 30
+                    
+                    echo ""
+                    echo "=== Deployment Status ==="
+                    kubectl get deployment -n $(helmNamespaceProd) -o wide || echo "No deployments yet"
+                    
+                    echo ""
+                    echo "=== Pod Status ==="
+                    kubectl get pods -n $(helmNamespaceProd) -o wide || echo "No pods yet"
+                    
+                    echo ""
+                    echo "=== Recent Events ==="
+                    kubectl get events -n $(helmNamespaceProd) --sort-by='.lastTimestamp' | tail -10 || echo "No events"
+                  displayName: "Deploy Helm Chart"
 
-                # ===== STEP 2: INSTALL SECRETS STORE CSI DRIVER =====
-                - task: AzureCLI@2
-                  displayName: "Install Secrets Store CSI Driver"
-                  inputs:
-                    azureSubscription: "$(azureServiceConnection)"
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      export KUBECONFIG=/tmp/kubeconfig-prod.yaml
+                # ===== STEP 3: MONITOR DEPLOYMENT =====
+                - script: |
+                    echo "=========================================="
+                    echo "MONITORING DEPLOYMENT STATUS"
+                    echo "=========================================="
+                    
+                    TIMEOUT=600
+                    ELAPSED=0
+                    
+                    while [ $ELAPSED -lt $TIMEOUT ]; do
+                      READY=$(kubectl get deployment $(helmReleaseName) -n $(helmNamespaceProd) -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+                      DESIRED=$(kubectl get deployment $(helmReleaseName) -n $(helmNamespaceProd) -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
                       
-                      echo "Installing Secrets Store CSI Driver..."
-                      helm repo add secrets-store-csi-driver https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
-                      helm repo update
+                      echo "[$(($ELAPSED / 60))m] Pods Ready: $READY / Desired: $DESIRED"
                       
-                      helm upgrade --install csi-secrets-store secrets-store-csi-driver/secrets-store-csi-driver \
-                        --namespace kube-system \
-                        --wait \
-                        --timeout 5m \
-                        --debug || echo "⚠️ CSI driver installation completed with warnings (checking status...)"
+                      if [ "$READY" = "$DESIRED" ] && [ "$DESIRED" != "0" ]; then
+                        echo ""
+                        echo "✅ DEPLOYMENT SUCCESSFUL!"
+                        kubectl get pods -n $(helmNamespaceProd) -o wide
+                        exit 0
+                      fi
                       
-                      echo ""
-                      echo "Checking CSI driver pod status..."
-                      kubectl get pods -n kube-system | grep secrets-store || echo "⚠️ CSI driver pods not found yet"
-                      
-                      echo ""
-                      echo "Installing Azure Key Vault Provider..."
-                      helm repo add azure-provider https://azure.github.io/secrets-store-csi-driver-provider-azure/charts
-                      helm repo update
-                      
-                      helm upgrade --install azure-provider azure-provider/csi-secrets-store-provider-azure \
-                        --namespace kube-system \
-                        --wait \
-                        --timeout 5m \
-                        --debug || echo "⚠️ Azure provider installation completed with warnings (checking status...)"
-                      
-                      echo ""
-                      echo "Checking Azure provider pod status..."
-                      kubectl get pods -n kube-system | grep azure-provider || echo "⚠️ Azure provider pods not found yet"
-                      
-                      echo ""
-                      echo "✅ CSI Driver setup complete!"
-                  continueOnError: true
-
-                # ===== STEP 3: MAIN DEPLOYMENT =====
-                - task: AzureCLI@2
-                  displayName: "Deploy Helm chart to AKS Prod"
-                  inputs:
-                    azureSubscription: "$(azureServiceConnection)"
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      set -e
-                      
-                      export KUBECONFIG=/tmp/kubeconfig-prod.yaml
-                      
-                      echo "Testing Kubernetes connection..."
-                      kubectl cluster-info
-                      
-                      echo ""
-                      echo "Deploying application..."
-                      helm upgrade --install $(helmReleaseName) $(helmChartPath) \
-                        --namespace $(helmNamespaceProd) \
-                        --create-namespace \
-                        -f $(helmChartPath)/values-prod.yaml \
-                        --set image.repository=$(acrLoginServer)/$(imageName) \
-                        --set image.tag=$(imageTag) \
-                        --timeout 15m \
-                        --wait=false \
-                        --debug
-                      
-                      echo ""
-                      echo "Waiting 60 seconds for pods to initialize..."
-                      sleep 60
-                      
-                      echo ""
-                      echo "=== Checking Pod Status ==="
-                      kubectl get pods -n $(helmNamespaceProd) -o wide || true
-                      
-                      echo ""
-                      echo "=== Checking Deployment Status ==="
-                      kubectl get deployments -n $(helmNamespaceProd) -o wide || true
-                      
-                      echo ""
-                      echo "=== Recent Events ==="
-                      kubectl get events -n $(helmNamespaceProd) --sort-by='.lastTimestamp' | head -20 || true
-                      
-                      echo ""
-                      echo "✅ Helm deployment initiated (pods may still be starting)"
-
-                # ===== STEP 4: POST-DEPLOYMENT VERIFICATION =====
-                - task: AzureCLI@2
-                  displayName: "Verify Deployment Status (Prod)"
-                  inputs:
-                    azureSubscription: "$(azureServiceConnection)"
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    inlineScript: |
-                      export KUBECONFIG=/tmp/kubeconfig-prod.yaml
-                      
-                      echo "Waiting for deployment to stabilize (up to 10 minutes)..."
-                      
-                      TIMEOUT=600
-                      ELAPSED=0
-                      while [ $ELAPSED -lt $TIMEOUT ]; do
-                        READY=$(kubectl get deployment $(helmReleaseName) -n $(helmNamespaceProd) -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-                        DESIRED=$(kubectl get deployment $(helmReleaseName) -n $(helmNamespaceProd) -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")
-                        
-                        echo "[$(($ELAPSED / 60))m] Ready: $READY / Desired: $DESIRED"
-                        
-                        if [ "$READY" = "$DESIRED" ] && [ "$READY" != "0" ]; then
-                          echo "✅ Deployment is ready!"
-                          break
-                        fi
-                        
-                        sleep 15
-                        ELAPSED=$((ELAPSED + 15))
-                      done
-                      
-                      echo ""
-                      echo "=== Final Pod Status ==="
-                      kubectl get pods -n $(helmNamespaceProd) -o wide
-                      
-                      echo ""
-                      echo "=== Pod Logs ==="
-                      kubectl logs -n $(helmNamespaceProd) --all-containers=true --timestamps=true --tail=50 || true
-                      
-                      echo ""
-                      echo "=== Final Events ==="
-                      kubectl get events -n $(helmNamespaceProd) --sort-by='.lastTimestamp'
-                      
-                      echo ""
-                      echo "✅ Production deployment verification complete!"
+                      sleep 15
+                      ELAPSED=$((ELAPSED + 15))
+                    done
+                    
+                    echo ""
+                    echo "⚠️ Deployment monitoring timeout (still initializing)"
+                    echo ""
+                    echo "=== Final Status ==="
+                    kubectl get pods -n $(helmNamespaceProd) -o wide
+                    kubectl get events -n $(helmNamespaceProd) --sort-by='.lastTimestamp'
+                  displayName: "Monitor Deployment (10 min timeout)"
                   continueOnError: true
