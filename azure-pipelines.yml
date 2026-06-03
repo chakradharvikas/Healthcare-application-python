@@ -123,7 +123,7 @@ stages:
               failTaskOnFailedTests: false
 
           # ===== NEW: SONARQUBE SCANNER - PREPARE ANALYSIS =====
-          - task: SonarQubePrepare@5
+          - task: SonarQubePrepare@7
             displayName: "SonarQube Prepare Analysis Configuration"
             inputs:
               SonarQube: '$(sonarQubeServiceConnection)'
@@ -138,11 +138,11 @@ stages:
                 sonar.exclusions=**/*_test.py,**/tests/**
 
           # ===== NEW: SONARQUBE SCANNER - RUN ANALYSIS =====
-          - task: SonarQubeAnalyze@5
+          - task: SonarQubeAnalyze@7
             displayName: "SonarQube Run Code Analysis"
 
           # ===== NEW: SONARQUBE SCANNER - PUBLISH QUALITY GATE =====
-          - task: SonarQubePublish@5
+          - task: SonarQubePublish@7
             displayName: "SonarQube Publish Quality Gate Result"
             inputs:
               pollingTimeoutSec: '300'
