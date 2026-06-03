@@ -1,0 +1,7 @@
+keyvault:
+  name: hc-kv-tfplan97
+  tenantId: "a784860b-041b-42c0-a9b9-557e2e721e95"
+  clientId: ""
+
+workloadIdentity:
+  enabled: true
