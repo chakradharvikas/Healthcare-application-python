@@ -56,7 +56,7 @@ stages:
 
           - script: |
               python -m pip install --upgrade pip
-              pip install ruff pytest semgrep pip-audit trufflehog
+              pip install ruff pytest pytest-cov semgrep pip-audit trufflehog
               pip install -r requirements.txt
             displayName: "Install Python tooling and app dependencies"
 
